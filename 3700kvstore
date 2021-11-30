@@ -1,0 +1,139 @@
+#!/usr/bin/env python3
+
+import sys, socket, select, time, json, random
+
+# Your ID number
+my_id = sys.argv[1]
+
+# The ID numbers of all the other replicas
+replica_ids = sys.argv[2:]
+
+# Connect to the network. All messages to/from other replicas and clients will
+# occur over this socket
+sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+sock.connect(my_id)
+
+last = 0
+lastHeartbeat = 0
+
+SELECT_WAIT_TIME = 0.01 # 10 milliseconds
+TERMINATOR = b'}\n'
+buffer = b''
+
+HEARTBEAT_INTERVAL = 0.1 # 100ms
+election_timeout = random.randint(150, 300) / 1000 # 150-300ms
+print(my_id, election_timeout)
+
+# Server state variables
+role = 'follower'
+state = {}
+currentTerm = 0
+votedFor = None
+log = [] # list of dictionaries, { term, key, value }
+commitIndex = 0
+lastApplied = 0
+
+# only relevant for leaders
+nextIndex = []
+matchIndex = []
+
+numReceivedVotes = 0
+
+# Receive 
+def recv_msgs(sock):
+	global buffer
+
+	fresh_buf = sock.recv(16384)
+
+	# is this sock shutting down?
+	if len(fresh_buf) == 0:
+			return None
+
+	buffer += fresh_buf	
+
+	msgs = []
+	while TERMINATOR in buffer:
+		position = buffer.find(TERMINATOR) + len(TERMINATOR)
+		msgs.append(json.loads(buffer[:position - 1].decode()))  # -1 to remove the \n, which json.loads won't want
+		buffer = buffer[position:]
+
+	return msgs
+
+while True:
+	clock = time.time()
+	ready = select.select([sock], [], [], SELECT_WAIT_TIME)[0]
+	
+	if sock in ready:
+		msgs = recv_msgs(sock)
+
+		for msg in msgs:
+		
+			# For now, ignore get() and put() from clients
+			if msg['type'] in ['get', 'put']:
+				send_msg = {'src': my_id, 'dst': msg['src'], 'leader': 'FFFF', 'type': 'fail', 'MID': msg['MID']}
+				# Make sure to end all messages with \n
+				# sock.send(json.dumps(send_msg).encode() + b'\n')
+			
+			# AppendEntriesRPC
+			if msg['type'] == 'AppendEntriesRPC':
+				last = clock
+				role = 'follower'
+				numReceivedVotes = 0
+
+				if msg['term'] > currentTerm:
+					currentTerm = msg['term']
+					role = 'follower'
+				# handle AppendEntriesRPC
+
+			# RequestVoteRPC
+			if msg['type'] == 'RequestVoteRPC':
+				last = clock
+				role = 'candidate'
+				grant_vote = msg['term'] >= currentTerm and (votedFor in [None, msg['candidateId']]) and (msg['lastLogIndex'] >= len(log) - 1) and (msg['lastLogTerm'] >= '' # TODO implement this
+				)
+
+				if grant_vote:
+					votedFor = msg['candidateId']
+
+				send_msg = {'src': my_id, 'dst': msg['src'], 'leader': 'FFFF', 'type': 'RequestVoteRPCResponse', 'term': currentTerm, 'voteGranted': grant_vote }
+				print(msg)
+				sock.send(json.dumps(send_msg).encode() + b'\n')
+
+				if msg['term'] > currentTerm:
+					currentTerm = msg['term']
+					role = 'follower'
+			
+			# RequestVoteRPCResponse
+			if msg['type'] == 'RequestVoteRPCResponse':
+				if msg['term'] > currentTerm:
+					currentTerm = msg['term']
+					role = 'follower'
+				print(msg)
+				if msg['voteGranted']:
+					numReceivedVotes += 1
+				if numReceivedVotes >= len(replica_ids) / 2: # numReceivedVotes should already be 1 for the replica that triggered the election
+					# become leader
+					print('new leader', my_id)
+					role = 'leader'
+					numReceivedVotes = 0 # reset
+					msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm}
+					sock.send(json.dumps(msg).encode() + b'\n')
+					lastHeartbeat = clock
+		
+	if clock - last > election_timeout:
+		# Hit election timeout, send RequestVoteRPC to all other servers
+		role = 'candidate'
+		currentTerm += 1
+		votedFor = my_id
+		numReceivedVotes += 1
+		msg = {'src': my_id, 'dst': 'FFFF', 'leader': 'FFFF', 'type': 'RequestVoteRPC', 'term': currentTerm, 'candidateId': my_id, 'lastLogIndex': len(log) - 1, 'lastLogTerm': '' # TODO implement this
+		}
+		# Make sure to end all messages with \n
+		sock.send(json.dumps(msg).encode() + b'\n')
+		last = clock
+	
+	if role == 'leader' and clock - lastHeartbeat >= HEARTBEAT_INTERVAL:
+		# send heartbeat message
+		msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm }
+		sock.send(json.dumps(msg).encode() + b'\n')
+		lastHeartbeat = clock
