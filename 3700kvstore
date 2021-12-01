@@ -82,7 +82,6 @@ while True:
 
 				if msg['term'] > currentTerm:
 					currentTerm = msg['term']
-					role = 'follower'
 				# handle AppendEntriesRPC
 
 			# RequestVoteRPC
@@ -120,7 +119,7 @@ while True:
 					sock.send(json.dumps(msg).encode() + b'\n')
 					lastHeartbeat = clock
 		
-	if clock - last > election_timeout:
+	if clock - last > election_timeout and role == 'follower':
 		# Hit election timeout, send RequestVoteRPC to all other servers
 		role = 'candidate'
 		currentTerm += 1
