@@ -38,6 +38,7 @@ nextIndex = []
 matchIndex = []
 
 numReceivedVotes = 0
+leaderId = 'FFFF'
 
 # Receive 
 def recv_msgs(sock):
@@ -70,7 +71,10 @@ while True:
 		
 			# For now, ignore get() and put() from clients
 			if msg['type'] in ['get', 'put']:
-				send_msg = {'src': my_id, 'dst': msg['src'], 'leader': 'FFFF', 'type': 'fail', 'MID': msg['MID']}
+				if role != 'leader':
+					send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'redirect', 'MID': msg['MID']}
+				else:
+					send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'fail', 'MID': msg['MID']}
 				# Make sure to end all messages with \n
 				# sock.send(json.dumps(send_msg).encode() + b'\n')
 			
@@ -79,6 +83,7 @@ while True:
 				last = clock
 				role = 'follower'
 				numReceivedVotes = 0
+				print(msg)
 
 				if msg['term'] > currentTerm:
 					currentTerm = msg['term']
@@ -95,7 +100,6 @@ while True:
 					votedFor = msg['candidateId']
 
 				send_msg = {'src': my_id, 'dst': msg['src'], 'leader': 'FFFF', 'type': 'RequestVoteRPCResponse', 'term': currentTerm, 'voteGranted': grant_vote }
-				print(msg)
 				sock.send(json.dumps(send_msg).encode() + b'\n')
 
 				if msg['term'] > currentTerm:
