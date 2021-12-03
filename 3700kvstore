@@ -22,7 +22,6 @@ buffer = b''
 
 HEARTBEAT_INTERVAL = 0.1 # 100ms
 election_timeout = random.randint(150, 300) / 1000 # 150-300ms
-print(my_id, election_timeout)
 
 # Server state variables
 role = 'follower'
@@ -74,19 +73,24 @@ while True:
 				if role != 'leader':
 					send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'redirect', 'MID': msg['MID']}
 				else:
-					send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'fail', 'MID': msg['MID']}
+					if msg['type'] == 'get':
+						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'], 'value': state[msg['key']] if state[msg['key']] else '' }
+					elif msg['type'] == 'put':
+						state[msg['key']] = msg['value']
+						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'] }
 				# Make sure to end all messages with \n
-				# sock.send(json.dumps(send_msg).encode() + b'\n')
+				sock.send(json.dumps(send_msg).encode() + b'\n')
 			
 			# AppendEntriesRPC
 			if msg['type'] == 'AppendEntriesRPC':
 				last = clock
 				role = 'follower'
 				numReceivedVotes = 0
-				print(msg)
 
 				if msg['term'] > currentTerm:
 					currentTerm = msg['term']
+
+				leaderId = msg['leader']
 				# handle AppendEntriesRPC
 
 			# RequestVoteRPC
@@ -111,13 +115,12 @@ while True:
 				if msg['term'] > currentTerm:
 					currentTerm = msg['term']
 					role = 'follower'
-				print(msg)
 				if msg['voteGranted']:
 					numReceivedVotes += 1
 				if numReceivedVotes >= len(replica_ids) / 2: # numReceivedVotes should already be 1 for the replica that triggered the election
 					# become leader
-					print('new leader', my_id)
 					role = 'leader'
+					leaderId = my_id
 					numReceivedVotes = 0 # reset
 					msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm}
 					sock.send(json.dumps(msg).encode() + b'\n')
