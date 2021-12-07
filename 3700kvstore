@@ -59,6 +59,7 @@ def recv_msgs(sock):
 
 	return msgs
 
+time.sleep(0.5)
 while True:
 	clock = time.time()
 	ready = select.select([sock], [], [], SELECT_WAIT_TIME)[0]
