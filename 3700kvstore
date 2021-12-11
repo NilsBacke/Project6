@@ -20,7 +20,7 @@ SELECT_WAIT_TIME = 0.01 # 10 milliseconds
 TERMINATOR = b'}\n'
 buffer = b''
 
-HEARTBEAT_INTERVAL = 0.1 # 100ms
+HEARTBEAT_INTERVAL = 0.15 # 150ms
 election_timeout = random.randint(150, 300) / 1000 # 150-300ms
 
 # Server state variables
@@ -33,11 +33,14 @@ commitIndex = 0
 lastApplied = 0
 
 # only relevant for leaders
-nextIndex = []
-matchIndex = []
+nextIndex = {}
+matchIndex = {}
 
 numReceivedVotes = 0
+numReceivedAcceptAppends = {} # MID to num
 leaderId = 'FFFF'
+
+failed_messages = {}
 
 # Receive 
 def recv_msgs(sock):
@@ -73,14 +76,19 @@ while True:
 			if msg['type'] in ['get', 'put']:
 				if role != 'leader':
 					send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'redirect', 'MID': msg['MID']}
+					sock.send(json.dumps(send_msg).encode() + b'\n')
 				else:
 					if msg['type'] == 'get':
+						log.append({ 'type': 'get', 'key': msg['key'], 'term': currentTerm })
+
 						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'], 'value': state[msg['key']] if state[msg['key']] else '' }
+						sock.send(json.dumps(send_msg).encode() + b'\n')
 					elif msg['type'] == 'put':
-						state[msg['key']] = msg['value']
-						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'] }
-				# Make sure to end all messages with \n
-				sock.send(json.dumps(send_msg).encode() + b'\n')
+						log.append({ 'type': 'put', 'key': msg['key'], 'value': msg['value'], 'term': currentTerm })
+						prevLogIndex = len(log) - 2
+						send_msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': prevLogIndex, 'prevLogTerm': log[prevLogIndex]['term'] if prevLogIndex != -1 else 0, 'entries': log, 'leaderCommit': commitIndex, 'MID': msg['MID'], 'clientId': msg['src'] }
+						lastHeartbeat = clock
+						sock.send(json.dumps(send_msg).encode() + b'\n')
 			
 			# AppendEntriesRPC
 			if msg['type'] == 'AppendEntriesRPC':
@@ -88,11 +96,75 @@ while True:
 				role = 'follower'
 				numReceivedVotes = 0
 
-				if msg['term'] > currentTerm:
-					currentTerm = msg['term']
+				if len(msg['entries']) > 0:
+					success = True
 
-				leaderId = msg['leader']
-				# handle AppendEntriesRPC
+					# 1 of Receiver implementation
+					if msg['term'] < currentTerm:
+						success = False
+
+					# 2 of Receiver implementation
+					if msg['prevLogIndex'] != -1 and msg['prevLogIndex'] < len(log):
+						if log[msg['prevLogIndex']]['term'] != msg['prevLogTerm']:
+							success = False
+
+					# 3 of Receiver implementation
+					lastIndex = 0
+					for index, _ in enumerate(msg['entries']):
+						if index < len(log):
+							lastIndex = index
+							if log[index]['term'] != msg['entries'][index]['term']:
+								log = log[0:index]
+								break
+
+					# 4 of Receiver implementation
+					log.extend(msg['entries'][lastIndex:])
+
+					# 5 of Receiver implementation
+					if msg['leaderCommit'] > commitIndex:
+						commitIndex = min(msg['leaderCommit'], len(log) - 1)
+
+					if msg['term'] > currentTerm:
+						currentTerm = msg['term']
+
+					leaderId = msg['leader']
+
+					send_msg = { 'src': my_id, 'dst': leaderId, 'leader': leaderId, 'type': 'AppendEntriesRPCResponse', 'term': currentTerm, 'success': success, 'MID': msg['MID'], 'clientId': msg['clientId'], 'entry': log[-1] }
+					sock.send(json.dumps(send_msg).encode() + b'\n')
+
+			# AppendEntriesRPCResponse
+			if msg['type'] == 'AppendEntriesRPCResponse':
+				currentTerm = msg['term']
+				success = msg['success']
+
+				if success:
+					if msg['MID'] in numReceivedAcceptAppends:
+						numReceivedAcceptAppends[msg['MID']] += 1
+					else:
+						numReceivedAcceptAppends[msg['MID']] = 1
+					matchIndex[msg['src']] = len(log) - 1
+
+				if numReceivedAcceptAppends[msg['MID']] > len(replica_ids) / 2:
+					numReceivedAcceptAppends[msg['MID']] = 0
+					# apply entry to local
+					last_entry = msg['entry']
+					if last_entry['type'] == 'put':
+						state[last_entry['key']] = last_entry['value']
+						lastApplied = len(log) - 1
+						send_msg = { 'type': 'ApplyEntries', 'src': my_id, 'dst': 'FFFF', 'leader': leaderId, 'apply': last_entry, 'MID': msg['MID'], 'clientId': msg['src'] }
+						sock.send(json.dumps(send_msg).encode() + b'\n')
+
+						commitIndex = len(log) - 1
+						send_msg = {'src': my_id, 'dst': msg['clientId'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'] }
+
+						sock.send(json.dumps(send_msg).encode() + b'\n')
+
+			# ApplyEntries
+			if msg['type'] == 'ApplyEntries':
+				leaderId = msg['src']
+				last_entry = msg['apply']
+				state[last_entry['key']] = last_entry['value']
+				lastApplied = len(log) - 1
 
 			# RequestVoteRPC
 			if msg['type'] == 'RequestVoteRPC':
@@ -123,7 +195,7 @@ while True:
 					role = 'leader'
 					leaderId = my_id
 					numReceivedVotes = 0 # reset
-					msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm}
+					msg = { 'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': -1, 'prevLogTerm': -1, 'entries': [], 'leaderCommit': commitIndex }
 					sock.send(json.dumps(msg).encode() + b'\n')
 					lastHeartbeat = clock
 		
@@ -141,6 +213,6 @@ while True:
 	
 	if role == 'leader' and clock - lastHeartbeat >= HEARTBEAT_INTERVAL:
 		# send heartbeat message
-		msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm }
+		msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': -1, 'prevLogTerm': -1, 'entries': [], 'leaderCommit': commitIndex }
 		sock.send(json.dumps(msg).encode() + b'\n')
 		lastHeartbeat = clock
