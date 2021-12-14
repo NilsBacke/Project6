@@ -175,7 +175,7 @@ while True:
 					nextIndex[msg['src']] = msg['nextIndex'] + len(msg['entries'])
 				else:
 					# decrement and retry
-					nextIndex[msg['src']] = nextIndex[msg['src']] - 1
+					nextIndex[msg['src']] = msg['nextIndex'] - 1
 
 					next_index = nextIndex[msg['src']]
 					prevLogIndex = next_index - 1
@@ -184,7 +184,7 @@ while True:
 					send_msg = {'src': my_id, 'dst': msg['src'], 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': prevLogIndex, 'prevLogTerm': prevLogTerm, 'entries': entries, 'leaderCommit': commitIndex, 'MID': msg['MID'], 'clientId': msg['src'], 'nextIndex': next_index }
 					sock.send(json.dumps(send_msg).encode() + b'\n')
 
-				if numReceivedAcceptAppends[msg['MID']] >= len(replica_ids) / 2:
+				if msg['MID'] in numReceivedAcceptAppends and numReceivedAcceptAppends[msg['MID']] >= len(replica_ids) / 2:
 					numReceivedAcceptAppends[msg['MID']] = -1000
 					if msg['MID'] in timeAwaitingPutQuorum:
 						del timeAwaitingPutQuorum[msg['MID']]
@@ -230,7 +230,7 @@ while True:
 					# numReceivedVotes should already be 1 for the replica that triggered the election
 					# become leader
 					if numReceivedVotes > len(replica_ids) / 2: 
-						print('leader', my_id)
+						# print('leader', my_id)
 						role = 'leader'
 						leaderId = my_id
 						numReceivedVotes = 0 # reset
@@ -243,7 +243,7 @@ while True:
 		
 	if role != 'leader' and clock - last > election_timeout:
 		# Hit election timeout, send RequestVoteRPC to all other servers
-		print('trigger election', my_id)
+		# print('trigger election', my_id)
 		role = 'candidate'
 		currentTerm += 1
 		votedFor = my_id
@@ -262,7 +262,7 @@ while True:
 	
 	for key, val in timeAwaitingPutQuorum.items():
 		if clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM:
-			print('sending retry', key, val['msgs'][0]['entries'][-1]['index'])
+			# print('sending retry', key, val['msgs'][0]['entries'][-1]['index'])
 			numReceivedAcceptAppends[val['msgs'][0]['MID']] = 0
 			for msg in val['msgs']:
 				msg['leader'] = leaderId
