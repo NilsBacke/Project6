@@ -20,15 +20,15 @@ SELECT_WAIT_TIME = 0.01 # 10 milliseconds
 TERMINATOR = b'}\n'
 buffer = b''
 
-HEARTBEAT_INTERVAL = 0.15 # 150ms
-election_timeout = random.randint(150, 300) / 1000 # 150-300ms
+HEARTBEAT_INTERVAL = 0.150 # 150ms
+election_timeout = random.randint(500, 800) / 1000 # 500-800ms
 
 # Server state variables
 role = 'follower'
 state = {}
 currentTerm = 0
 votedFor = None
-log = [] # list of dictionaries, { term, key, value }
+log = [] # list of dictionaries, [{ term, key, value }]
 commitIndex = 0
 lastApplied = 0
 
@@ -40,7 +40,8 @@ numReceivedVotes = 0
 numReceivedAcceptAppends = {} # MID to num
 leaderId = 'FFFF'
 
-failed_messages = {}
+MAX_TIME_AWAITING_PUT_QUORUM = 1 # 1s
+timeAwaitingPutQuorum = {} # dictionary mapping MID to { 'time': 0, 'msg': {} }
 
 # Receive 
 def recv_msgs(sock):
@@ -71,24 +72,38 @@ while True:
 		msgs = recv_msgs(sock)
 
 		for msg in msgs:
-		
-			# For now, ignore get() and put() from clients
 			if msg['type'] in ['get', 'put']:
 				if role != 'leader':
 					send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'redirect', 'MID': msg['MID']}
 					sock.send(json.dumps(send_msg).encode() + b'\n')
-				else:
+				elif role == 'leader':
 					if msg['type'] == 'get':
 						log.append({ 'type': 'get', 'key': msg['key'], 'term': currentTerm })
 
-						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'], 'value': state[msg['key']] if state[msg['key']] else '' }
+						val = ''
+						if msg['key'] in state:
+							val = state[msg['key']]
+						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'], 'value': val }
 						sock.send(json.dumps(send_msg).encode() + b'\n')
 					elif msg['type'] == 'put':
 						log.append({ 'type': 'put', 'key': msg['key'], 'value': msg['value'], 'term': currentTerm })
-						prevLogIndex = len(log) - 2
-						send_msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': prevLogIndex, 'prevLogTerm': log[prevLogIndex]['term'] if prevLogIndex != -1 else 0, 'entries': log, 'leaderCommit': commitIndex, 'MID': msg['MID'], 'clientId': msg['src'] }
+						messages_to_be_sent = []
+						for rep_id in replica_ids:
+							next_index = nextIndex[rep_id]
+							prevLogIndex = next_index - 1
+							prevLogTerm = -1
+							if prevLogIndex != -1:
+								prevLogTerm = log[prevLogIndex]['term'] if prevLogIndex < len(log) else log[-1]['term']
+							
+							entries = log[next_index:]
+
+							send_msg = { 'src': my_id, 'dst': rep_id, 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': prevLogIndex, 'prevLogTerm': prevLogTerm, 'entries': entries, 'leaderCommit': commitIndex, 'MID': msg['MID'], 'clientId': msg['src'], 'nextIndex': next_index }
+							messages_to_be_sent.append(send_msg)
+
 						lastHeartbeat = clock
-						sock.send(json.dumps(send_msg).encode() + b'\n')
+						timeAwaitingPutQuorum[msg['MID']] = { 'time': clock, 'msgs': messages_to_be_sent }
+						for send_msg in messages_to_be_sent:
+							sock.send(json.dumps(send_msg).encode() + b'\n')
 			
 			# AppendEntriesRPC
 			if msg['type'] == 'AppendEntriesRPC':
@@ -118,22 +133,31 @@ while True:
 								break
 
 					# 4 of Receiver implementation
-					log.extend(msg['entries'][lastIndex:])
+					if lastIndex < len(msg['entries']):
+						log.extend(msg['entries'][lastIndex:])
 
 					# 5 of Receiver implementation
 					if msg['leaderCommit'] > commitIndex:
 						commitIndex = min(msg['leaderCommit'], len(log) - 1)
+
+					if commitIndex > lastApplied:
+						for i in range(lastApplied + 1, commitIndex + 1):
+							if log[i]['type'] == 'put':
+								state[log[i]['key']] = log[i]['value']
+						lastApplied = commitIndex
 
 					if msg['term'] > currentTerm:
 						currentTerm = msg['term']
 
 					leaderId = msg['leader']
 
-					send_msg = { 'src': my_id, 'dst': leaderId, 'leader': leaderId, 'type': 'AppendEntriesRPCResponse', 'term': currentTerm, 'success': success, 'MID': msg['MID'], 'clientId': msg['clientId'], 'entry': log[-1] }
+					send_msg = { 'src': my_id, 'dst': leaderId, 'leader': leaderId, 'type': 'AppendEntriesRPCResponse', 'term': currentTerm, 'success': success, 'MID': msg['MID'], 'clientId': msg['clientId'], 'entry': log[-1], 'entries': msg['entries'], 'nextIndex': msg['nextIndex'] }
 					sock.send(json.dumps(send_msg).encode() + b'\n')
+				elif 'MID' in msg:
+					print('entries of length 0', msg)
 
 			# AppendEntriesRPCResponse
-			if msg['type'] == 'AppendEntriesRPCResponse':
+			if role == 'leader' and msg['type'] == 'AppendEntriesRPCResponse':
 				currentTerm = msg['term']
 				success = msg['success']
 
@@ -142,70 +166,83 @@ while True:
 						numReceivedAcceptAppends[msg['MID']] += 1
 					else:
 						numReceivedAcceptAppends[msg['MID']] = 1
-					matchIndex[msg['src']] = len(log) - 1
+					matchIndex[msg['src']] = nextIndex[msg['src']] - 1
+					nextIndex[msg['src']] = msg['nextIndex'] + len(msg['entries'])
+				else:
+					# decrement and retry
+					nextIndex[msg['src']] = nextIndex[msg['src']] - 1
 
-				if numReceivedAcceptAppends[msg['MID']] > len(replica_ids) / 2:
-					numReceivedAcceptAppends[msg['MID']] = 0
+					next_index = nextIndex[msg['src']]
+					prevLogIndex = next_index - 1
+					prevLogTerm = log[prevLogIndex]['term'] if prevLogIndex != -1 else -1
+					entries = log[next_index:]
+					send_msg = {'src': my_id, 'dst': msg['src'], 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': prevLogIndex, 'prevLogTerm': prevLogTerm, 'entries': entries, 'leaderCommit': commitIndex, 'MID': msg['MID'], 'clientId': msg['src'] }
+					sock.send(json.dumps(send_msg).encode() + b'\n')
+
+				if numReceivedAcceptAppends[msg['MID']] >= len(replica_ids) / 2:
+					numReceivedAcceptAppends[msg['MID']] = -1000
+					if msg['MID'] in timeAwaitingPutQuorum:
+						del timeAwaitingPutQuorum[msg['MID']]
+
 					# apply entry to local
 					last_entry = msg['entry']
-					if last_entry['type'] == 'put':
-						state[last_entry['key']] = last_entry['value']
-						lastApplied = len(log) - 1
-						send_msg = { 'type': 'ApplyEntries', 'src': my_id, 'dst': 'FFFF', 'leader': leaderId, 'apply': last_entry, 'MID': msg['MID'], 'clientId': msg['src'] }
-						sock.send(json.dumps(send_msg).encode() + b'\n')
+					state[last_entry['key']] = last_entry['value']
+					lastApplied = len(log) - 1
 
-						commitIndex = len(log) - 1
-						send_msg = {'src': my_id, 'dst': msg['clientId'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'] }
+					commitIndex = len(log) - 1
+					send_msg = {'src': my_id, 'dst': msg['clientId'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'] }
 
-						sock.send(json.dumps(send_msg).encode() + b'\n')
-
-			# ApplyEntries
-			if msg['type'] == 'ApplyEntries':
-				leaderId = msg['src']
-				last_entry = msg['apply']
-				state[last_entry['key']] = last_entry['value']
-				lastApplied = len(log) - 1
+					sock.send(json.dumps(send_msg).encode() + b'\n')
 
 			# RequestVoteRPC
 			if msg['type'] == 'RequestVoteRPC':
 				last = clock
 				role = 'candidate'
-				grant_vote = msg['term'] >= currentTerm and (votedFor in [None, msg['candidateId']]) and (msg['lastLogIndex'] >= len(log) - 1) and (msg['lastLogTerm'] >= '' # TODO implement this
-				)
+
+				if msg['term'] > currentTerm:
+					currentTerm = msg['term']
+					role = 'follower'
+					votedFor = None
+
+				grant_vote = msg['term'] >= currentTerm and (votedFor in [None, msg['candidateId']]) and (msg['lastLogIndex'] >= len(log) - 1) and (msg['lastLogTerm'] >= (log[-1]['term'] if len(log) > 0 else 0))
 
 				if grant_vote:
 					votedFor = msg['candidateId']
 
 				send_msg = {'src': my_id, 'dst': msg['src'], 'leader': 'FFFF', 'type': 'RequestVoteRPCResponse', 'term': currentTerm, 'voteGranted': grant_vote }
 				sock.send(json.dumps(send_msg).encode() + b'\n')
-
-				if msg['term'] > currentTerm:
-					currentTerm = msg['term']
-					role = 'follower'
 			
 			# RequestVoteRPCResponse
-			if msg['type'] == 'RequestVoteRPCResponse':
+			if msg['type'] == 'RequestVoteRPCResponse' and role == 'candidate':
 				if msg['term'] > currentTerm:
 					currentTerm = msg['term']
 					role = 'follower'
-				if msg['voteGranted']:
-					numReceivedVotes += 1
-				if numReceivedVotes >= len(replica_ids) / 2: # numReceivedVotes should already be 1 for the replica that triggered the election
+					votedFor = None
+				else:
+					if msg['term'] == currentTerm and msg['voteGranted']:
+						numReceivedVotes += 1
+					# numReceivedVotes should already be 1 for the replica that triggered the election
 					# become leader
-					role = 'leader'
-					leaderId = my_id
-					numReceivedVotes = 0 # reset
-					msg = { 'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': -1, 'prevLogTerm': -1, 'entries': [], 'leaderCommit': commitIndex }
-					sock.send(json.dumps(msg).encode() + b'\n')
-					lastHeartbeat = clock
+					if numReceivedVotes > len(replica_ids) / 2: 
+						print('leader', my_id)
+						role = 'leader'
+						leaderId = my_id
+						numReceivedVotes = 0 # reset
+						msg = { 'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': -1, 'prevLogTerm': -1, 'entries': [], 'leaderCommit': commitIndex }
+						sock.send(json.dumps(msg).encode() + b'\n')
+						for rep_id in replica_ids:
+							nextIndex[rep_id] = len(log)
+							matchIndex[rep_id] = 0
+						lastHeartbeat = clock
 		
-	if clock - last > election_timeout and role == 'follower':
+	if role != 'leader' and clock - last > election_timeout:
 		# Hit election timeout, send RequestVoteRPC to all other servers
+		print('trigger election', my_id)
 		role = 'candidate'
 		currentTerm += 1
 		votedFor = my_id
-		numReceivedVotes += 1
-		msg = {'src': my_id, 'dst': 'FFFF', 'leader': 'FFFF', 'type': 'RequestVoteRPC', 'term': currentTerm, 'candidateId': my_id, 'lastLogIndex': len(log) - 1, 'lastLogTerm': '' # TODO implement this
+		numReceivedVotes = 1
+		msg = {'src': my_id, 'dst': 'FFFF', 'leader': 'FFFF', 'type': 'RequestVoteRPC', 'term': currentTerm, 'candidateId': my_id, 'lastLogIndex': len(log) - 1, 'lastLogTerm': (log[-1]['term'] if len(log) > 0 else 0)
 		}
 		# Make sure to end all messages with \n
 		sock.send(json.dumps(msg).encode() + b'\n')
@@ -216,3 +253,11 @@ while True:
 		msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': -1, 'prevLogTerm': -1, 'entries': [], 'leaderCommit': commitIndex }
 		sock.send(json.dumps(msg).encode() + b'\n')
 		lastHeartbeat = clock
+	
+	for key, val in timeAwaitingPutQuorum.items():
+		if clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM:
+			print('sending retry', key)
+			for msg in val['msgs']:
+				msg['leader'] = leaderId
+				sock.send(json.dumps(msg).encode() + b'\n')
+			timeAwaitingPutQuorum[key] = { 'time': clock, 'msgs': val['msgs'] }
