@@ -20,7 +20,7 @@ SELECT_WAIT_TIME = 0.01 # 10 milliseconds
 TERMINATOR = b'}\n'
 buffer = b''
 
-HEARTBEAT_INTERVAL = 0.150 # 150ms
+HEARTBEAT_INTERVAL = 0.100 # 150ms
 election_timeout = random.randint(500, 800) / 1000 # 500-800ms
 
 # Server state variables
@@ -87,7 +87,6 @@ while True:
 						if msg['key'] in state:
 							val = state[msg['key']]
 						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'], 'value': val }
-						print(msg['key'], state[msg['key']])
 						sock.send(json.dumps(send_msg).encode() + b'\n')
 					elif msg['type'] == 'put':
 						log.append({ 'type': 'put', 'key': msg['key'], 'value': msg['value'], 'term': currentTerm, 'index': len(log) })
@@ -161,11 +160,10 @@ while True:
 						for i in range(lastApplied + 1, commitIndex + 1):
 							if log[i]['type'] == 'put':
 								state[log[i]['key']] = log[i]['value']
-								print('put', log[i]['key'], state[log[i]['key']])
 						lastApplied = commitIndex
 				
 				if 'MID' in msg:
-					send_msg = { 'src': my_id, 'dst': leaderId, 'leader': leaderId, 'type': 'AppendEntriesRPCResponse', 'term': currentTerm, 'success': success, 'MID': msg['MID'], 'clientId': msg['clientId'], 'entries': msg['entries'], 'nextIndex': msg['nextIndex'] }
+					send_msg = { 'src': my_id, 'dst': leaderId, 'leader': leaderId, 'type': 'AppendEntriesRPCResponse', 'term': currentTerm, 'success': success, 'MID': msg['MID'], 'clientId': msg['clientId'], 'entries': msg['entries'], 'nextIndex': msg['nextIndex'], 'prevLogIndex': msg['prevLogIndex'], 'prevLogTerm': msg['prevLogTerm'] }
 					sock.send(json.dumps(send_msg).encode() + b'\n')
 
 			# AppendEntriesRPCResponse
@@ -186,9 +184,10 @@ while True:
 
 					next_index = nextIndex[msg['src']]
 					prevLogIndex = next_index - 1
-					prevLogTerm = log[prevLogIndex]['term'] if prevLogIndex != -1 else -1
-					entries = log[next_index:]
-					send_msg = {'src': my_id, 'dst': msg['src'], 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': prevLogIndex, 'prevLogTerm': prevLogTerm, 'entries': entries, 'leaderCommit': commitIndex, 'MID': msg['MID'], 'clientId': msg['src'], 'nextIndex': next_index }
+					prevLogTerm = -1
+					if prevLogIndex != -1:
+						prevLogTerm = log[prevLogIndex]['term'] if prevLogIndex < len(log) else log[-1]['term']
+					send_msg = {'src': my_id, 'dst': msg['src'], 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': prevLogIndex, 'prevLogTerm': prevLogTerm, 'entries': msg['entries'], 'leaderCommit': commitIndex, 'MID': msg['MID'], 'clientId': msg['src'], 'nextIndex': next_index }
 					sock.send(json.dumps(send_msg).encode() + b'\n')
 
 				if msg['MID'] in numReceivedAcceptAppends and numReceivedAcceptAppends[msg['MID']] >= len(replica_ids) / 2:

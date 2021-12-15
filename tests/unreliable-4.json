@@ -1,15 +1,16 @@
 {
 	"lifetime": 30,
 	"replicas": 5,
-	"requests": 500,
+	"requests": 200,
 	"mix": 0.2,
 	"drops": 0.3,
+	"end_wait": 10,
 	"tests": {
 		"benchmarks": {
-			"total_msgs": [2300, 4500, 6000],
-			"failures": [0, 1, 5],
-			"duplicates": [0, 3, 6],
-			"median_latency": [0.001, 0.005, 0.05]
+			"total_msgs": [1000, 3000, 4000],
+			"failures": [1, 10, 100],
+			"duplicates": [0, 6, 20],
+			"median_latency": [0.0002, 0.005, 0.1]
 		}
 	},
 	"maximum_get_generation_fail_fraction": 0.2
