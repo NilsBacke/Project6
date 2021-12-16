@@ -125,9 +125,9 @@ while True:
 						success = False
 
 					# 2 of Receiver implementation
-					if msg['prevLogIndex'] == -1:
+					if msg['prevLogIndex'] != -1 and msg['prevLogIndex'] < len(log) and log[msg['prevLogIndex']]['term'] == msg['prevLogTerm']:
 						success = True
-					if msg['prevLogIndex'] < len(log) and log[msg['prevLogIndex']]['term'] == msg['prevLogTerm']:
+					if msg['prevLogIndex'] == -1:
 						success = True
 					
 					if success:
