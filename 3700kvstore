@@ -304,6 +304,7 @@ while True:
 			sock.send(json.dumps(msg).encode() + b'\n')
 		lastHeartbeat = clock
 	
+	keys_to_delete = []
 	for key, val in timeAwaitingPutQuorum.items():
 		if val['times'] == 4:
 			if role == 'leader':
@@ -328,3 +329,6 @@ while True:
 			# timeAwaitingPutQuorum[key]['times'] = val['times'] + 1
 			send_msg = { 'src': my_id, 'dst': val['msgs'][0]['entries'][-1]['clientId'], 'leader': leaderId, 'type': 'fail', 'MID': val['msgs'][0]['entries'][-1]['MID'] }
 			sock.send(json.dumps(msg).encode() + b'\n')
+			keys_to_delete.append(key)
+	for key in keys_to_delete:
+		del timeAwaitingPutQuorum[key]
