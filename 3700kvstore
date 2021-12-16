@@ -290,7 +290,7 @@ while True:
 		lastHeartbeat = clock
 	
 	for key, val in timeAwaitingPutQuorum.items():
-		if val['times'] > 3:
+		if val['times'] == 3:
 			print('trigger election', my_id)
 			role = 'candidate'
 			currentTerm += 1
@@ -307,4 +307,5 @@ while True:
 			for msg in val['msgs']:
 				msg['leader'] = leaderId
 				sock.send(json.dumps(msg).encode() + b'\n')
-			timeAwaitingPutQuorum[key] = { 'time': clock, 'msgs': val['msgs'], 'times': val['times'] + 1 }
+				
+		timeAwaitingPutQuorum[key] = { 'time': clock, 'msgs': val['msgs'], 'times': val['times'] + 1 }
