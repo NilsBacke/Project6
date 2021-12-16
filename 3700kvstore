@@ -81,6 +81,7 @@ while True:
 						val = ''
 						if msg['key'] in state:
 							val = state[msg['key']]
+						print('get', msg['key'], val)
 						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'], 'value': val }
 						sock.send(json.dumps(send_msg).encode() + b'\n')
 					elif msg['type'] == 'put':
@@ -258,7 +259,7 @@ while True:
 					# numReceivedVotes should already be 1 for the replica that triggered the election
 					# become leader
 					if numReceivedVotes > len(replica_ids) / 2: 
-						print('leader', my_id)
+						print('leader', my_id, state.keys())
 						role = 'leader'
 						leaderId = my_id
 						numReceivedVotes = 0 # reset
