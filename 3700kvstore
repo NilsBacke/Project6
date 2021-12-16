@@ -302,10 +302,10 @@ while True:
 			# Make sure to end all messages with \n
 			sock.send(json.dumps(msg).encode() + b'\n')
 			last = clock
-		elif clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM and :
+		elif clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM:
 			print('sending retry', key, val['msgs'][0]['entries'][-1]['index'], list(map(lambda x: x['dst'], val['msgs'])))
 			for msg in val['msgs']:
 				msg['leader'] = leaderId
 				sock.send(json.dumps(msg).encode() + b'\n')
-				
+
 		timeAwaitingPutQuorum[key] = { 'time': clock, 'msgs': val['msgs'], 'times': val['times'] + 1 }
