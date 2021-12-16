@@ -293,8 +293,15 @@ while True:
 	
 	if role == 'leader' and clock - lastHeartbeat >= HEARTBEAT_INTERVAL:
 		# send heartbeat message
-		msg = {'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': -1, 'prevLogTerm': -1, 'entries': [], 'leaderCommit': commitIndex }
-		sock.send(json.dumps(msg).encode() + b'\n')
+		for rep_id in replica_ids:
+			next_index = nextIndex[rep_id]
+			prevLogIndex = next_index - 1
+			prevLogTerm = -1
+			if prevLogIndex != -1:
+				prevLogTerm = log[prevLogIndex]['term'] if prevLogIndex < len(log) else log[-1]['term']
+
+			msg = {'src': my_id, 'dst': rep_id, 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': prevLogIndex, 'prevLogTerm': prevLogTerm, 'entries': [], 'leaderCommit': commitIndex }
+			sock.send(json.dumps(msg).encode() + b'\n')
 		lastHeartbeat = clock
 	
 	for key, val in timeAwaitingPutQuorum.items():
