@@ -165,7 +165,7 @@ while True:
 						if msg['prevLogIndex'] < len(log):
 							for i in range(msg['prevLogIndex'] - 1, -1, -1):
 								if log[i]['term'] != log[msg['prevLogIndex']]['term']:
-									conflictIndex = i + 1
+									conflictIndex = i
 									break
 							conflictTerm = log[msg['prevLogIndex']]['term']
 
@@ -238,7 +238,7 @@ while True:
 							index = -1
 							for i in range(len(log) - 1, -1, -1):
 								if log[i]['term'] == msg['conflictTerm']:
-									index = i + 1
+									index = i
 									break
 							if index != -1:
 								nextIndex[msg['src']] = index 
