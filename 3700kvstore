@@ -156,18 +156,8 @@ while True:
 								state[log[i]['key']] = log[i]['value']
 								print('replica applying', my_id, log[i]['key'], log[i]['value'])
 								lastApplied = i
-						
-						conflictTerm = -1
-						conflictIndex = len(log)
 					else:
-						conflictTerm = -1
-						conflictIndex = len(log)
-						if msg['prevLogIndex'] < len(log):
-							for i in range(msg['prevLogIndex'] - 1, -1, -1):
-								if log[i]['term'] != log[msg['prevLogIndex']]['term']:
-									conflictIndex = i
-									break
-							conflictTerm = log[msg['prevLogIndex']]['term']
+						print('wrong term', my_id, currentTerm, msg['term'])
 
 					if 'MID' in msg:
 						print('append entries', my_id, msg['leaderCommit'], commitIndex, lastApplied, currentTerm, success)
@@ -232,16 +222,7 @@ while True:
 						if msg['MID'] in timeAwaitingPutQuorum:
 							timeAwaitingPutQuorum[msg['MID']]['time'] = clock
 
-						nextIndex[msg['src']] = msg['conflictIndex']
-
-						if msg['conflictTerm'] != -1:
-							index = -1
-							for i in range(len(log) - 1, -1, -1):
-								if log[i]['term'] == msg['conflictTerm']:
-									index = i
-									break
-							if index != -1:
-								nextIndex[msg['src']] = index 
+						nextIndex[msg['src']] = msg['nextIndex'] - 1
 
 						next_index = nextIndex[msg['src']]
 						prevLogIndex = next_index - 1
