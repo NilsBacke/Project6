@@ -189,7 +189,6 @@ while True:
 									new_msgs.append(m)
 							timeAwaitingPutQuorum[msg['MID']]['msgs'] = new_msgs
 
-						print('old commit Index', commitIndex)
 						commitIndexCounter = commitIndex + 1
 						commitIndexChanged = False
 						while commitIndexCounter < len(log):
@@ -206,7 +205,6 @@ while True:
 										del timeAwaitingPutQuorum[log[commitIndexCounter]['MID']]
 							commitIndexCounter += 1
 
-						print('new commit Index', commitIndex)
 						if commitIndexChanged and commitIndex > lastApplied:
 							for i in range(lastApplied + 1, commitIndex + 1):
 								state[log[i]['key']] = log[i]['value']
