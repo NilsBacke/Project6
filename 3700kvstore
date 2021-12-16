@@ -199,7 +199,7 @@ while True:
 									if matchIndex[rep_id] >= commitIndexCounter:
 										matches += 1
 								
-								if matches > len(replica_ids) / 2:
+								if matches >= len(replica_ids) / 2:
 									commitIndex = commitIndexCounter
 									commitIndexChanged = True
 									if log[commitIndexCounter]['MID'] in timeAwaitingPutQuorum:
@@ -306,7 +306,7 @@ while True:
 	
 	keys_to_delete = []
 	for key, val in timeAwaitingPutQuorum.items():
-		if clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM and len(val['msgs']) > 0 and len(val['msgs']) < len(replica_ids) / 2:
+		if clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM and len(val['msgs']) > 0 and len(val['msgs']) <= len(replica_ids) / 2:
 			print('sending retry', val['msgs'][0]['entries'][-1]['key'], val['msgs'][0]['entries'][-1]['index'], list(map(lambda x: x['dst'], val['msgs'])))
 			send_msg = { 'src': my_id, 'dst': val['msgs'][0]['entries'][-1]['clientId'], 'leader': leaderId, 'type': 'fail', 'MID': val['msgs'][0]['entries'][-1]['MID'] }
 			sock.send(json.dumps(msg).encode() + b'\n')
