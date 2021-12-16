@@ -290,8 +290,8 @@ while True:
 		lastHeartbeat = clock
 	
 	for key, val in timeAwaitingPutQuorum.items():
-		if val['times'] == 3:
-			print('trigger election', my_id)
+		if val['times'] == 5:
+			print('trigger election special', my_id)
 			role = 'candidate'
 			currentTerm += 1
 			votedFor = my_id
