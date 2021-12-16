@@ -306,27 +306,8 @@ while True:
 	
 	keys_to_delete = []
 	for key, val in timeAwaitingPutQuorum.items():
-		if val['times'] == 4:
-			if role == 'leader':
-				print('trigger election special', my_id)
-				role = 'candidate'
-				currentTerm += 1
-				votedFor = my_id
-				numReceivedVotes = 1
-				leaderId = 'FFFF'
-				msg = {'src': my_id, 'dst': 'FFFF', 'leader': 'FFFF', 'type': 'RequestVoteRPC', 'term': currentTerm, 'candidateId': my_id, 'lastLogIndex': len(log) - 1, 'lastLogTerm': (log[-1]['term'] if len(log) > 0 else 0)
-				}
-				# Make sure to end all messages with \n
-				sock.send(json.dumps(msg).encode() + b'\n')
-				last = clock
-				timeAwaitingPutQuorum[key]['times'] = val['times'] + 1
-		elif clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM and val['times'] < 4 and len(val['msgs']) > 0 and len(val['msgs']) < len(replica_ids) / 2:
+		if clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM and len(val['msgs']) > 0 and len(val['msgs']) < len(replica_ids) / 2:
 			print('sending retry', val['msgs'][0]['entries'][-1]['key'], val['msgs'][0]['entries'][-1]['index'], list(map(lambda x: x['dst'], val['msgs'])))
-			# for msg in val['msgs']:
-			# 	msg['leader'] = leaderId
-			# 	sock.send(json.dumps(msg).encode() + b'\n')
-			# timeAwaitingPutQuorum[key]['time'] = clock
-			# timeAwaitingPutQuorum[key]['times'] = val['times'] + 1
 			send_msg = { 'src': my_id, 'dst': val['msgs'][0]['entries'][-1]['clientId'], 'leader': leaderId, 'type': 'fail', 'MID': val['msgs'][0]['entries'][-1]['MID'] }
 			sock.send(json.dumps(msg).encode() + b'\n')
 			keys_to_delete.append(key)
