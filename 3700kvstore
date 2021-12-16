@@ -154,7 +154,7 @@ while True:
 							state[log[i]['key']] = log[i]['value']
 							lastApplied = i
 
-					print('append entries', my_id, msg['leaderCommit'], commitIndex, lastApplied, currentTerm, log)
+					print('append entries', my_id, msg['leaderCommit'], commitIndex, lastApplied, currentTerm, log[-5:])
 				else:
 					print('wrong term', my_id, currentTerm, msg['term'])
 				
