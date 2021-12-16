@@ -81,8 +81,6 @@ while True:
 					sock.send(json.dumps(send_msg).encode() + b'\n')
 				elif role == 'leader':
 					if msg['type'] == 'get':
-						# log.append({ 'type': 'get', 'key': msg['key'], 'term': currentTerm })
-
 						val = ''
 						if msg['key'] in state:
 							val = state[msg['key']]
@@ -113,8 +111,6 @@ while True:
 				role = 'follower'
 				numReceivedVotes = 0
 				votedFor = None
-
-				print(msg['leader'])
 
 				# handle heartbeat
 				if 'MID' not in msg:
@@ -214,6 +210,7 @@ while True:
 			if msg['type'] == 'RequestVoteRPC':
 				last = clock
 				role = 'candidate'
+				leaderId = 'FFFF'
 
 				if msg['term'] > currentTerm:
 					currentTerm = msg['term']
@@ -258,6 +255,7 @@ while True:
 		currentTerm += 1
 		votedFor = my_id
 		numReceivedVotes = 1
+		leaderId = 'FFFF'
 		msg = {'src': my_id, 'dst': 'FFFF', 'leader': 'FFFF', 'type': 'RequestVoteRPC', 'term': currentTerm, 'candidateId': my_id, 'lastLogIndex': len(log) - 1, 'lastLogTerm': (log[-1]['term'] if len(log) > 0 else 0)
 		}
 		# Make sure to end all messages with \n
