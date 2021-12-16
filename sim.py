@@ -351,7 +351,7 @@ class Client:
                 self.sim.stats.incorrect += 1
     
             if self.items[req.key] != msg['value']:
-                warn(f"*** Simulator Error - client received an incorrect value for a key: {raw_msg}")
+                warn(f"*** Simulator Error - client received an incorrect value for a key: {raw_msg}, key: {req.key}, expecting: {self.items[req.key]}")
                 self.sim.stats.incorrect += 1
         else:
             self.items[req.key] = req.val

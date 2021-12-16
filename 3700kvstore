@@ -202,6 +202,7 @@ while True:
 						if commitIndexChanged and commitIndex > lastApplied:
 							for i in range(lastApplied + 1, commitIndex + 1):
 								state[log[i]['key']] = log[i]['value']
+								print('applied', log[i]['key'], log[i]['value'])
 								send_msg = {'src': my_id, 'dst': log[i]['clientId'], 'leader': leaderId, 'type': 'ok', 'MID': log[i]['MID'] }
 
 								sock.send(json.dumps(send_msg).encode() + b'\n')
@@ -257,7 +258,7 @@ while True:
 					# numReceivedVotes should already be 1 for the replica that triggered the election
 					# become leader
 					if numReceivedVotes > len(replica_ids) / 2: 
-						# print('leader', my_id)
+						print('leader', my_id)
 						role = 'leader'
 						leaderId = my_id
 						numReceivedVotes = 0 # reset
@@ -270,7 +271,7 @@ while True:
 		
 	if role != 'leader' and clock - last > election_timeout:
 		# Hit election timeout, send RequestVoteRPC to all other servers
-		# print('trigger election', my_id)
+		print('trigger election', my_id)
 		role = 'candidate'
 		currentTerm += 1
 		votedFor = my_id
@@ -289,8 +290,20 @@ while True:
 		lastHeartbeat = clock
 	
 	for key, val in timeAwaitingPutQuorum.items():
-		if clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM and val['times'] < 3:
-			# print('sending retry', key, val['msgs'][0]['entries'][-1]['index'], list(map(lambda x: x['dst'], val['msgs'])))
+		if val['times'] > 3:
+			print('trigger election', my_id)
+			role = 'candidate'
+			currentTerm += 1
+			votedFor = my_id
+			numReceivedVotes = 1
+			leaderId = 'FFFF'
+			msg = {'src': my_id, 'dst': 'FFFF', 'leader': 'FFFF', 'type': 'RequestVoteRPC', 'term': currentTerm, 'candidateId': my_id, 'lastLogIndex': len(log) - 1, 'lastLogTerm': (log[-1]['term'] if len(log) > 0 else 0)
+			}
+			# Make sure to end all messages with \n
+			sock.send(json.dumps(msg).encode() + b'\n')
+			last = clock
+		elif clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM and :
+			print('sending retry', key, val['msgs'][0]['entries'][-1]['index'], list(map(lambda x: x['dst'], val['msgs'])))
 			for msg in val['msgs']:
 				msg['leader'] = leaderId
 				sock.send(json.dumps(msg).encode() + b'\n')
