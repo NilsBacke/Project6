@@ -156,7 +156,8 @@ while True:
 							state[log[i]['key']] = log[i]['value']
 							lastApplied = i
 
-					print('append entries', my_id, msg['leaderCommit'], commitIndex, lastApplied, currentTerm)
+					if 'MID' in msg:
+						print('append entries', my_id, msg['leaderCommit'], commitIndex, lastApplied, currentTerm)
 				else:
 					print('wrong term', my_id, currentTerm, msg['term'])
 
