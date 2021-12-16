@@ -132,19 +132,19 @@ while True:
 						last = clock
 
 					# 3 of Receiver implementation
-					lastIndex = 0
+					entriesIndex = 0
 					for index in range(msg['prevLogIndex'] + 1, len(log)):
-						if lastIndex < len(msg['entries']):
-							if log[index]['term'] != msg['entries'][lastIndex]['term']:
+						if entriesIndex < len(msg['entries']):
+							if log[index]['term'] != msg['entries'][entriesIndex]['term']:
 								log = log[0:index]
 								break
-							lastIndex += 1
+							entriesIndex += 1
 						else:
 							break
 
 					# 4 of Receiver implementation
-					if lastIndex < len(msg['entries']):
-						log.extend(msg['entries'][lastIndex:])
+					if entriesIndex < len(msg['entries']):
+						log.extend(msg['entries'][entriesIndex:])
 
 					# 5 of Receiver implementation
 					if msg['leaderCommit'] > commitIndex:
@@ -153,6 +153,10 @@ while True:
 						for i in range(lastApplied + 1, commitIndex + 1):
 							state[log[i]['key']] = log[i]['value']
 							lastApplied = i
+
+					print('append entries', my_id, msg['leaderCommit'], commitIndex, lastApplied, currentTerm, log)
+				else:
+					print('wrong term', my_id, currentTerm, msg['term'])
 				
 				if msg['term'] > currentTerm:
 					currentTerm = msg['term']
@@ -203,7 +207,7 @@ while True:
 						if commitIndexChanged and commitIndex > lastApplied:
 							for i in range(lastApplied + 1, commitIndex + 1):
 								state[log[i]['key']] = log[i]['value']
-								print('applied', log[i]['key'], log[i]['value'])
+								print('applied', my_id, log[i]['key'], log[i]['value'])
 								send_msg = {'src': my_id, 'dst': log[i]['clientId'], 'leader': leaderId, 'type': 'ok', 'MID': log[i]['MID'] }
 
 								sock.send(json.dumps(send_msg).encode() + b'\n')
