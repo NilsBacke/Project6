@@ -199,7 +199,7 @@ while True:
 									if matchIndex[rep_id] >= commitIndexCounter:
 										matches += 1
 								
-								if matches >= len(replica_ids) / 2:
+								if matches > len(replica_ids) / 2:
 									commitIndex = commitIndexCounter
 									commitIndexChanged = True
 									if log[commitIndexCounter]['MID'] in timeAwaitingPutQuorum:
