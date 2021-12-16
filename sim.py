@@ -567,12 +567,15 @@ class Simulation:
 
     def __partition_easy__(self):
         self.__partition__(True)
+        warn("Part Easy Start")
                         
     def __partition_hard__(self):
         self.__partition__()
+        warn("Part Hard Start")
 
     def __partition_end__(self):
         self.partition = None
+        warn("Part End")
 
     def __check_partition__(self, rid1, rid2):
         if not self.partition: return True
