@@ -320,7 +320,7 @@ while True:
 				sock.send(json.dumps(msg).encode() + b'\n')
 				last = clock
 				timeAwaitingPutQuorum[key]['times'] = val['times'] + 1
-		elif clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM and val['times'] < 4 and len(val['msgs']) > 0:
+		elif clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM and val['times'] < 4 and len(val['msgs']) > 0 and len(val['msgs']) < len(replica_ids) / 2:
 			print('sending retry', val['msgs'][0]['entries'][-1]['key'], val['msgs'][0]['entries'][-1]['index'], list(map(lambda x: x['dst'], val['msgs'])))
 			# for msg in val['msgs']:
 			# 	msg['leader'] = leaderId
