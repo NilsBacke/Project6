@@ -165,7 +165,7 @@ while True:
 					print('wrong term', my_id, currentTerm, msg['term'])
 
 				if 'MID' in msg:
-					send_msg = { 'src': my_id, 'dst': leaderId, 'leader': leaderId, 'type': 'AppendEntriesRPCResponse', 'term': currentTerm, 'success': success, 'MID': msg['MID'], 'clientId': msg['clientId'], 'entries': msg['entries'], 'nextIndex': msg['nextIndex'], 'prevLogIndex': msg['prevLogIndex'], 'prevLogTerm': msg['prevLogTerm'], 'conflictTerm': conflictTerm, 'conflictIndex': conflictIndex }
+					send_msg = { 'src': my_id, 'dst': leaderId, 'leader': leaderId, 'type': 'AppendEntriesRPCResponse', 'term': currentTerm, 'success': success, 'MID': msg['MID'], 'clientId': msg['clientId'], 'entries': msg['entries'], 'nextIndex': msg['nextIndex'], 'prevLogIndex': msg['prevLogIndex'], 'prevLogTerm': msg['prevLogTerm'] }
 					sock.send(json.dumps(send_msg).encode() + b'\n')
 
 			# AppendEntriesRPCResponse
