@@ -154,6 +154,7 @@ while True:
 
 							for i in range(lastApplied + 1, commitIndex + 1):
 								state[log[i]['key']] = log[i]['value']
+								print('replica applying', my_id, log[i]['key'], log[i]['value'])
 								lastApplied = i
 
 					if 'MID' in msg:
