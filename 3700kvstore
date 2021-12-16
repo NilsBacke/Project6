@@ -149,10 +149,9 @@ while True:
 					if msg['leaderCommit'] > commitIndex:
 						commitIndex = min(msg['leaderCommit'], len(log) - 1)
 
-					if commitIndex > lastApplied:
 						for i in range(lastApplied + 1, commitIndex + 1):
 							state[log[i]['key']] = log[i]['value']
-						lastApplied = commitIndex
+							lastApplied = i
 				
 				if msg['term'] > currentTerm:
 					currentTerm = msg['term']
@@ -186,25 +185,27 @@ while True:
 									new_msgs.append(m)
 							timeAwaitingPutQuorum[msg['MID']]['msgs'] = new_msgs
 
+						commitIndexCounter = commitIndex + 1
 						commitIndexChanged = False
-						for i in range(commitIndex + 1, len(log)):
-							if log[i]['term'] == currentTerm:
-								matchCount = 1
+						while commitIndexCounter < len(log):
+							if log[commitIndexCounter]['term'] == currentTerm:
+								matches = 1
 								for rep_id in replica_ids:
-									if matchIndex[rep_id] >= i:
-										matchCount += 1
-								if matchCount >= len(replica_ids) / 2:
-									commitIndex = i
+									if matchIndex[rep_id] >= commitIndexCounter:
+										matches += 1
+								
+								if matches >= len(replica_ids) / 2:
+									commitIndex = commitIndexCounter
 									commitIndexChanged = True
+							commitIndexCounter += 1
 
-						if commitIndexChanged:
-							if commitIndex > lastApplied:
-								for i in range(lastApplied + 1, commitIndex + 1):
-									state[log[i]['key']] = log[i]['value']
-									send_msg = {'src': my_id, 'dst': log[i]['clientId'], 'leader': leaderId, 'type': 'ok', 'MID': log[i]['MID'] }
+						if commitIndexChanged and commitIndex > lastApplied:
+							for i in range(lastApplied + 1, commitIndex + 1):
+								state[log[i]['key']] = log[i]['value']
+								send_msg = {'src': my_id, 'dst': log[i]['clientId'], 'leader': leaderId, 'type': 'ok', 'MID': log[i]['MID'] }
 
-									sock.send(json.dumps(send_msg).encode() + b'\n')
-									lastApplied = i
+								sock.send(json.dumps(send_msg).encode() + b'\n')
+								lastApplied = i
 					else:
 						# decrement and retry
 						if msg['MID'] in timeAwaitingPutQuorum:
