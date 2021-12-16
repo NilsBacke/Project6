@@ -133,28 +133,28 @@ while True:
 					if success:
 						last = clock
 
-					# 3 of Receiver implementation
-					entriesIndex = 0
-					for index in range(msg['prevLogIndex'] + 1, len(log)):
-						if entriesIndex < len(msg['entries']):
-							if log[index]['term'] != msg['entries'][entriesIndex]['term']:
-								log = log[0:index]
+						# 3 of Receiver implementation
+						entriesIndex = 0
+						for index in range(msg['prevLogIndex'] + 1, len(log)):
+							if entriesIndex < len(msg['entries']):
+								if log[index]['term'] != msg['entries'][entriesIndex]['term']:
+									log = log[0:index]
+									break
+								entriesIndex += 1
+							else:
 								break
-							entriesIndex += 1
-						else:
-							break
 
-					# 4 of Receiver implementation
-					if entriesIndex < len(msg['entries']):
-						log.extend(msg['entries'][entriesIndex:])
+						# 4 of Receiver implementation
+						if entriesIndex < len(msg['entries']):
+							log.extend(msg['entries'][entriesIndex:])
 
-					# 5 of Receiver implementation
-					if msg['leaderCommit'] > commitIndex:
-						commitIndex = min(msg['leaderCommit'], len(log) - 1)
+						# 5 of Receiver implementation
+						if msg['leaderCommit'] > commitIndex:
+							commitIndex = min(msg['leaderCommit'], len(log) - 1)
 
-						for i in range(lastApplied + 1, commitIndex + 1):
-							state[log[i]['key']] = log[i]['value']
-							lastApplied = i
+							for i in range(lastApplied + 1, commitIndex + 1):
+								state[log[i]['key']] = log[i]['value']
+								lastApplied = i
 
 					if 'MID' in msg:
 						print('append entries', my_id, msg['leaderCommit'], commitIndex, lastApplied, currentTerm, success)
