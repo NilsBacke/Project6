@@ -266,7 +266,7 @@ while True:
 						numReceivedVotes = 0 # reset
 						for rep_id in replica_ids:
 							nextIndex[rep_id] = len(log)
-							matchIndex[rep_id] = 0
+							matchIndex[rep_id] = -1
 
 							next_index = nextIndex[rep_id]
 							prevLogIndex = next_index - 1
