@@ -264,11 +264,17 @@ while True:
 						role = 'leader'
 						leaderId = my_id
 						numReceivedVotes = 0 # reset
-						msg = { 'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': -1, 'prevLogTerm': -1, 'entries': [], 'leaderCommit': commitIndex }
-						sock.send(json.dumps(msg).encode() + b'\n')
 						for rep_id in replica_ids:
 							nextIndex[rep_id] = len(log)
 							matchIndex[rep_id] = 0
+
+							next_index = nextIndex[rep_id]
+							prevLogIndex = next_index - 1
+							prevLogTerm = -1
+							if prevLogIndex != -1:
+								prevLogTerm = log[prevLogIndex]['term'] if prevLogIndex < len(log) else log[-1]['term']
+							msg = { 'src': my_id, 'dst': 'FFFF', 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': -1, 'prevLogTerm': -1, 'entries': [], 'leaderCommit': commitIndex }
+							sock.send(json.dumps(msg).encode() + b'\n')
 						lastHeartbeat = clock
 		
 	if role != 'leader' and clock - last > election_timeout:
