@@ -309,7 +309,7 @@ while True:
 				last = clock
 				timeAwaitingPutQuorum[key]['times'] = val['times'] + 1
 		elif clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM and val['times'] < 4:
-			print('sending retry', key, val['msgs'][0]['entries'][-1]['index'], list(map(lambda x: x['dst'], val['msgs'])))
+			print('sending retry', val['msgs'][0]['entries'][-1]['key'], val['msgs'][0]['entries'][-1]['index'], list(map(lambda x: x['dst'], val['msgs'])))
 			for msg in val['msgs']:
 				msg['leader'] = leaderId
 				sock.send(json.dumps(msg).encode() + b'\n')
