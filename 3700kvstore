@@ -201,6 +201,8 @@ while True:
 								if matches >= len(replica_ids) / 2:
 									commitIndex = commitIndexCounter
 									commitIndexChanged = True
+									if log[commitIndexCounter]['MID'] in timeAwaitingPutQuorum:
+										del timeAwaitingPutQuorum[log[commitIndexCounter]['MID']]
 							commitIndexCounter += 1
 
 						if commitIndexChanged and commitIndex > lastApplied:
@@ -225,11 +227,6 @@ while True:
 							prevLogTerm = log[prevLogIndex]['term'] if prevLogIndex < len(log) else log[-1]['term']
 						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': prevLogIndex, 'prevLogTerm': prevLogTerm, 'entries': msg['entries'], 'leaderCommit': commitIndex, 'MID': msg['MID'], 'clientId': msg['src'], 'nextIndex': next_index }
 						sock.send(json.dumps(send_msg).encode() + b'\n')
-
-					if msg['MID'] in numReceivedAcceptAppends and numReceivedAcceptAppends[msg['MID']] >= len(replica_ids) / 2:
-						numReceivedAcceptAppends[msg['MID']] = -1000
-						if msg['MID'] in timeAwaitingPutQuorum:
-							del timeAwaitingPutQuorum[msg['MID']]
 
 			# RequestVoteRPC
 			if msg['type'] == 'RequestVoteRPC':
