@@ -81,11 +81,11 @@ while True:
 						val = ''
 						if msg['key'] in state:
 							val = state[msg['key']]
-						print('get', msg['key'], val)
+						# print('get', msg['key'], val)
 						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'], 'value': val }
 						sock.send(json.dumps(send_msg).encode() + b'\n')
 					elif msg['type'] == 'put':
-						print('leader adding to log', my_id, msg['key'], msg['value'])
+						# print('leader adding to log', my_id, msg['key'], msg['value'])
 						log.append({ 'type': 'put', 'key': msg['key'], 'value': msg['value'], 'term': currentTerm, 'MID': msg['MID'], 'clientId': msg['src'], 'index': len(log) })
 						messages_to_be_sent = []
 						for rep_id in replica_ids:
@@ -155,13 +155,11 @@ while True:
 
 							for i in range(lastApplied + 1, commitIndex + 1):
 								state[log[i]['key']] = log[i]['value']
-								print('replica applying', my_id, log[i]['key'], log[i]['value'], log[i]['index'])
+								# print('replica applying', my_id, log[i]['key'], log[i]['value'], log[i]['index'])
 								lastApplied = i
 
 					if 'MID' in msg:
-						print('append entries', my_id, msg['leaderCommit'], commitIndex, lastApplied, currentTerm, success)
-				else:
-					print('wrong term', my_id, currentTerm, msg['term'])
+						# print('append entries', my_id, msg['leaderCommit'], commitIndex, lastApplied, currentTerm, success)
 
 				if 'MID' in msg:
 					send_msg = { 'src': my_id, 'dst': leaderId, 'leader': leaderId, 'type': 'AppendEntriesRPCResponse', 'term': currentTerm, 'success': success, 'MID': msg['MID'], 'clientId': msg['clientId'], 'entries': msg['entries'], 'nextIndex': msg['nextIndex'], 'prevLogIndex': msg['prevLogIndex'], 'prevLogTerm': msg['prevLogTerm'] }
@@ -211,7 +209,7 @@ while True:
 						if commitIndexChanged and commitIndex > lastApplied:
 							for i in range(lastApplied + 1, commitIndex + 1):
 								state[log[i]['key']] = log[i]['value']
-								print('applied', my_id, log[i]['key'], log[i]['value'], log[i]['index'])
+								# print('applied', my_id, log[i]['key'], log[i]['value'], log[i]['index'])
 								send_msg = {'src': my_id, 'dst': log[i]['clientId'], 'leader': leaderId, 'type': 'ok', 'MID': log[i]['MID'] }
 
 								sock.send(json.dumps(send_msg).encode() + b'\n')
@@ -263,7 +261,7 @@ while True:
 					# numReceivedVotes should already be 1 for the replica that triggered the election
 					# become leader
 					if numReceivedVotes > len(replica_ids) / 2: 
-						print('leader', my_id, state)
+						# print('leader', my_id, state)
 						role = 'leader'
 						leaderId = my_id
 						numReceivedVotes = 0 # reset
@@ -282,7 +280,7 @@ while True:
 		
 	if role != 'leader' and clock - last > election_timeout:
 		# Hit election timeout, send RequestVoteRPC to all other servers
-		print('trigger election', my_id)
+		# print('trigger election', my_id)
 		role = 'candidate'
 		currentTerm += 1
 		votedFor = my_id
@@ -310,7 +308,7 @@ while True:
 	keys_to_delete = []
 	for key, val in timeAwaitingPutQuorum.items():
 		if clock - val['time'] >= MAX_TIME_AWAITING_PUT_QUORUM and len(val['msgs']) > 0 and len(val['msgs']) <= len(replica_ids) / 2:
-			print('sending retry', val['msgs'][0]['entries'][-1]['key'], val['msgs'][0]['entries'][-1]['index'], list(map(lambda x: x['dst'], val['msgs'])))
+			# print('sending retry', val['msgs'][0]['entries'][-1]['key'], val['msgs'][0]['entries'][-1]['index'], list(map(lambda x: x['dst'], val['msgs'])))
 			send_msg = { 'src': my_id, 'dst': val['msgs'][0]['entries'][-1]['clientId'], 'leader': leaderId, 'type': 'fail', 'MID': val['msgs'][0]['entries'][-1]['MID'] }
 			sock.send(json.dumps(msg).encode() + b'\n')
 			keys_to_delete.append(key)
