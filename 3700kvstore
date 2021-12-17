@@ -154,10 +154,8 @@ while True:
 
 							for i in range(lastApplied + 1, commitIndex + 1):
 								state[log[i]['key']] = log[i]['value']
-								print('replica applying', my_id, log[i]['key'], log[i]['value'])
+								print('replica applying', my_id, log[i]['key'], log[i]['value'], log[i]['index'])
 								lastApplied = i
-					else:
-						print('wrong term', my_id, currentTerm, msg['term'])
 
 					if 'MID' in msg:
 						print('append entries', my_id, msg['leaderCommit'], commitIndex, lastApplied, currentTerm, success)
@@ -225,11 +223,12 @@ while True:
 						nextIndex[msg['src']] = msg['nextIndex'] - 1
 
 						next_index = nextIndex[msg['src']]
+						entries = log[next_index:]
 						prevLogIndex = next_index - 1
 						prevLogTerm = -1
 						if prevLogIndex != -1:
 							prevLogTerm = log[prevLogIndex]['term'] if prevLogIndex < len(log) else log[-1]['term']
-						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': prevLogIndex, 'prevLogTerm': prevLogTerm, 'entries': msg['entries'], 'leaderCommit': commitIndex, 'MID': msg['MID'], 'clientId': msg['src'], 'nextIndex': next_index }
+						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': my_id, 'type': 'AppendEntriesRPC', 'term': currentTerm, 'prevLogIndex': prevLogIndex, 'prevLogTerm': prevLogTerm, 'entries': entries, 'leaderCommit': commitIndex, 'MID': msg['MID'], 'clientId': msg['src'], 'nextIndex': next_index }
 						sock.send(json.dumps(send_msg).encode() + b'\n')
 
 			# RequestVoteRPC
