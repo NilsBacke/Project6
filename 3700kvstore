@@ -85,6 +85,7 @@ while True:
 						send_msg = {'src': my_id, 'dst': msg['src'], 'leader': leaderId, 'type': 'ok', 'MID': msg['MID'], 'value': val }
 						sock.send(json.dumps(send_msg).encode() + b'\n')
 					elif msg['type'] == 'put':
+						print('leader adding to log', my_id, msg['key'], msg['value'])
 						log.append({ 'type': 'put', 'key': msg['key'], 'value': msg['value'], 'term': currentTerm, 'MID': msg['MID'], 'clientId': msg['src'], 'index': len(log) })
 						messages_to_be_sent = []
 						for rep_id in replica_ids:
