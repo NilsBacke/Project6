@@ -262,7 +262,7 @@ while True:
 					# numReceivedVotes should already be 1 for the replica that triggered the election
 					# become leader
 					if numReceivedVotes > len(replica_ids) / 2: 
-						print('leader', my_id, state.keys())
+						print('leader', my_id, state)
 						role = 'leader'
 						leaderId = my_id
 						numReceivedVotes = 0 # reset
