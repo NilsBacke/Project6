@@ -158,9 +158,6 @@ while True:
 								# print('replica applying', my_id, log[i]['key'], log[i]['value'], log[i]['index'])
 								lastApplied = i
 
-					if 'MID' in msg:
-						# print('append entries', my_id, msg['leaderCommit'], commitIndex, lastApplied, currentTerm, success)
-
 				if 'MID' in msg:
 					send_msg = { 'src': my_id, 'dst': leaderId, 'leader': leaderId, 'type': 'AppendEntriesRPCResponse', 'term': currentTerm, 'success': success, 'MID': msg['MID'], 'clientId': msg['clientId'], 'entries': msg['entries'], 'nextIndex': msg['nextIndex'], 'prevLogIndex': msg['prevLogIndex'], 'prevLogTerm': msg['prevLogTerm'] }
 					sock.send(json.dumps(send_msg).encode() + b'\n')
